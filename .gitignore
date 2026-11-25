@@ -1,0 +1,12 @@
+# Codex-generated downloads and scratch files are kept outside the repository.
+/outputs/
+/work/
+
+# Xcode local state.
+ios/DerivedData/
+ios/build/
+ios/**/*.xcuserstate
+ios/**/xcuserdata/
+ios/*.ipa
+ios/*.dSYM
+ios/*.dSYM.zip
