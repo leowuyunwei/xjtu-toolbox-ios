@@ -85,6 +85,14 @@ final class CampusAPI {
 
     func grades() async throws -> [Grade] {
         let url = jwxtBase.appending(path: "/jwapp/sys/cjcx/modules/cjcx/xscjcx.do")
+        let sessionURL = jwxtBase.appending(path: "/jwapp/sys/cjcx/*default/index.do")
+        do {
+            _ = try await send(URLRequest(url: sessionURL))
+        } catch CampusAPIError.loginRequired {
+            throw CampusAPIError.loginRequired
+        } catch {
+            // 教务偶尔会让初始化页失败，但成绩查询接口仍可能可用。
+        }
         let querySetting = #"[{"name":"SFYX","caption":"是否有效","linkOpt":"AND","builderList":"cbl_m_List","builder":"m_value_equal","value":"1","value_display":"是"}]"#
         var all: [Grade] = []
         var page = 1

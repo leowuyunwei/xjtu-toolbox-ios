@@ -55,6 +55,7 @@ struct CampusLoginSheet: View {
                         }
                         .padding(13).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(false)
                     }
                 }
             }
