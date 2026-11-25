@@ -1,6 +1,6 @@
 # 岱宗盒子 iOS
 
-参考 [西交工具箱 Android](https://github.com/yeliqin666/xjtu-toolbox-android) 的原生 SwiftUI 客户端，最低支持 iOS 17。社区功能暂不实现。
+此项目于 2026-11-25 改编自 [西交工具箱 Android](https://github.com/yeliqin666/xjtu-toolbox-android)，是最低支持 iOS 17 的原生 SwiftUI 客户端。按 GPL-3.0 发布；社区功能暂不实现。
 
 ## 已接入
 

@@ -291,6 +291,15 @@ struct AboutView: View {
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(18).campusCard()
                 Text("此应用为非官方客户端。账号认证由学校网页处理，数据请求直接发送至学校服务。")
                     .font(.caption).foregroundStyle(Color.campusMuted).padding(.horizontal, 4)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Copyright © 2026 XJTU Toolbox iOS contributors")
+                        .font(.caption2).foregroundStyle(Color.campusMuted)
+                    Text("本软件按 GNU GPL v3 条款发布，可依该许可复制和修改；软件不提供任何担保。")
+                        .font(.caption2).foregroundStyle(Color.campusMuted).fixedSize(horizontal: false, vertical: true)
+                    Link("查看 GPL-3.0 许可证", destination: URL(string: "https://github.com/leowuyunwei/xjtu-toolbox-ios/blob/main/LICENSE")!)
+                        .font(.caption.weight(.medium))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(16).campusCard()
             }.padding(20)
         }.background(Color.campusCanvas.ignoresSafeArea()).navigationTitle("关于").navigationBarTitleDisplayMode(.inline)
     }
