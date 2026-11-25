@@ -1,20 +1,7 @@
-# 岱宗盒子 iOS 首版
+# 岱宗盒子 iOS
 
-原生 SwiftUI 客户端工程，最低支持 iOS 17。用 Xcode 打开 `XJTUToolbox.xcodeproj` 即可查看工程。
+SwiftUI 原生客户端工程，最低支持 iOS 17。当前接入学校 CAS、教务课表/成绩和校园卡余额/流水；图书馆选座、空闲教室、通知与社区暂不实现。数据直接访问西安交通大学服务，不经过第三方后端。
 
-## 当前范围
+登录在学校官方网页完成，App 不收集密码。教务课表和成绩由原生界面展示；校园卡页面使用学校官方网页。更多真机签名和 GitHub Actions IPA 构建步骤见仓库根目录 README。
 
-- 首页概览与常用服务入口
-- 周课表浏览
-- 成绩列表与加权 GPA 演示计算
-- 校园卡余额和消费流水页面
-- 图书馆座位选择交互
-- 空闲教室筛选
-- 校园通知列表、个人页和关于页
-- 社区功能暂不实现
-
-目前数据均为本地演示内容。CAS 登录/MFA、教务和校园系统接口尚未接入，因此不要将演示余额、成绩、座位和通知当作实时信息。接口接入时建议沿用独立的数据源协议，让 SwiftUI 界面可以切换真实校园数据与预览数据。
-
-## 原项目
-
-此客户端参考 [xjtu-toolbox-android](https://github.com/yeliqin666/xjtu-toolbox-android)。原项目使用 GPL-3.0；继续分发本 iOS 衍生版本时应一并遵循该许可，并保留上游声明。
+推送到 `main` 后，GitHub Actions 自动生成未签名模拟器 `.app`。真机 `.ipa` 需要 Apple Distribution 证书、Ad Hoc profile 以及登记过的 iPhone UDID。

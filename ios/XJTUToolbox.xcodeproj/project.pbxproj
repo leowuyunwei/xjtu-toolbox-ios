@@ -10,6 +10,9 @@
 		A10000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* Models.swift */; };
 		A10000000000000000000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* ContentView.swift */; };
 		A10000000000000000000004 /* FeatureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* FeatureViews.swift */; };
+		A10000000000000000000005 /* CampusAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* CampusAPI.swift */; };
+		A10000000000000000000006 /* LoginWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* LoginWebView.swift */; };
+		A10000000000000000000007 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* WebKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,15 +22,18 @@
 		A20000000000000000000004 /* FeatureViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureViews.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000006 /* XJTUToolbox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = XJTUToolbox.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000007 /* CampusAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CampusAPI.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* LoginWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginWebView.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000007 /* WebKit.framework in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {isa = PBXGroup; children = (A40000000000000000000002 /* XJTUToolbox */, A40000000000000000000003 /* Products */, ); sourceTree = "<group>"; };
-		A40000000000000000000002 /* XJTUToolbox */ = {isa = PBXGroup; path = XJTUToolbox; sourceTree = "<group>"; children = (A20000000000000000000001 /* XJTUToolboxApp.swift */, A20000000000000000000002 /* Models.swift */, A20000000000000000000003 /* ContentView.swift */, A20000000000000000000004 /* FeatureViews.swift */, A20000000000000000000005 /* Info.plist */, ); };
+		A40000000000000000000002 /* XJTUToolbox */ = {isa = PBXGroup; path = XJTUToolbox; sourceTree = "<group>"; children = (A20000000000000000000001 /* XJTUToolboxApp.swift */, A20000000000000000000002 /* Models.swift */, A20000000000000000000003 /* ContentView.swift */, A20000000000000000000004 /* FeatureViews.swift */, A20000000000000000000007 /* CampusAPI.swift */, A20000000000000000000008 /* LoginWebView.swift */, A20000000000000000000005 /* Info.plist */, ); };
 		A40000000000000000000003 /* Products */ = {isa = PBXGroup; children = (A20000000000000000000006 /* XJTUToolbox.app */, ); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
@@ -44,7 +50,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* XJTUToolboxApp.swift in Sources */, A10000000000000000000002 /* Models.swift in Sources */, A10000000000000000000003 /* ContentView.swift in Sources */, A10000000000000000000004 /* FeatureViews.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* XJTUToolboxApp.swift in Sources */, A10000000000000000000002 /* Models.swift in Sources */, A10000000000000000000003 /* ContentView.swift in Sources */, A10000000000000000000004 /* FeatureViews.swift in Sources */, A10000000000000000000005 /* CampusAPI.swift in Sources */, A10000000000000000000006 /* LoginWebView.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
