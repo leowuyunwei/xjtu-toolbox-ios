@@ -53,7 +53,7 @@ final class CampusAPI {
         let data = try await send(formRequest(url, fields: [:]))
         let root = try object(data, label: "当前学期")
         let rows = nestedObjects(root, keys: ["datas", "dqxnxq", "rows"])
-        guard let code = rows.first?["DM"].asString, !code.isEmpty else {
+        guard let code = stringValue(rows.first?["DM"]), !code.isEmpty else {
             throw CampusAPIError.invalidResponse("教务系统没有返回当前学期。")
         }
         return code
@@ -65,19 +65,19 @@ final class CampusAPI {
         let root = try object(data, label: "课表")
         let rows = nestedObjects(root, keys: ["datas", "xskcb", "rows"])
         return rows.compactMap { row in
-            guard let name = row["KCM"].asString?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
-                  let day = row["SKXQ"].asInt, (1...7).contains(day) else { return nil }
-            let start = row["KSJC"].asInt ?? 1
-            let end = row["JSJC"].asInt ?? start
+            guard let name = stringValue(row["KCM"])?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
+                  let day = intValue(row["SKXQ"]), (1...7).contains(day) else { return nil }
+            let start = intValue(row["KSJC"]) ?? 1
+            let end = intValue(row["JSJC"]) ?? start
             return Course(
                 name: name,
-                teacher: row["SKJS"].asString ?? "",
-                room: row["JASMC"].asString ?? "",
+                teacher: stringValue(row["SKJS"]) ?? "",
+                room: stringValue(row["JASMC"]) ?? "",
                 start: start,
                 end: end,
                 weekday: day,
-                weeksText: row["ZCMC"].asString?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-                    ?? Self.weeksLabel(fromBitString: row["SKZC"].asString),
+                weeksText: stringValue(row["ZCMC"])?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+                    ?? Self.weeksLabel(fromBitString: stringValue(row["SKZC"])),
                 termCode: term
             )
         }
@@ -105,8 +105,8 @@ final class CampusAPI {
                 "pageNumber": String(page)
             ]))
             let root = try object(data, label: "成绩")
-            guard root["code"].asString == "0" else {
-                throw CampusAPIError.service(root["msg"].asString ?? "教务系统成绩查询失败。")
+            guard stringValue(root["code"]) == "0" else {
+                throw CampusAPIError.service(stringValue(root["msg"]) ?? "教务系统成绩查询失败。")
             }
             guard let report = root["datas"] as? [String: Any],
                   let result = report["xscjcx"] as? [String: Any],
@@ -115,18 +115,18 @@ final class CampusAPI {
             }
 
             for row in rows {
-                guard let name = row["KCM"].asString?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
-                      let term = row["XNXQDM"].asString else { continue }
+                guard let name = stringValue(row["KCM"])?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
+                      let term = stringValue(row["XNXQDM"]) else { continue }
                 all.append(Grade(
                     name: name,
                     termCode: term,
-                    score: row["ZCJ"].asString ?? row["DJCJMC_DISPLAY"].asString ?? "—",
-                    credits: row["XF"].asDouble ?? 0,
-                    points: row["XFJD"].asDouble ?? 0
+                    score: stringValue(row["ZCJ"]) ?? stringValue(row["DJCJMC_DISPLAY"]) ?? "—",
+                    credits: doubleValue(row["XF"]) ?? 0,
+                    points: doubleValue(row["XFJD"]) ?? 0
                 ))
             }
 
-            let total = result["totalSize"].asInt ?? all.count
+            let total = intValue(result["totalSize"]) ?? all.count
             if all.count >= total || rows.count < pageSize { break }
             page += 1
         }
@@ -213,15 +213,21 @@ final class CampusAPI {
     }
 }
 
-private extension Any {
-    var asString: String? {
-        if let string = self as? String { return string }
-        if let number = self as? NSNumber { return number.stringValue }
-        return nil
-    }
+private func stringValue(_ value: Any?) -> String? {
+    guard let value else { return nil }
+    if let string = value as? String { return string }
+    if let number = value as? NSNumber { return number.stringValue }
+    return nil
+}
 
-    var asInt: Int? { (self as? NSNumber)?.intValue ?? (self as? String).flatMap(Int.init) }
-    var asDouble: Double? { (self as? NSNumber)?.doubleValue ?? (self as? String).flatMap(Double.init) }
+private func intValue(_ value: Any?) -> Int? {
+    guard let value else { return nil }
+    return (value as? NSNumber)?.intValue ?? (value as? String).flatMap(Int.init)
+}
+
+private func doubleValue(_ value: Any?) -> Double? {
+    guard let value else { return nil }
+    return (value as? NSNumber)?.doubleValue ?? (value as? String).flatMap(Double.init)
 }
 
 private extension String {
