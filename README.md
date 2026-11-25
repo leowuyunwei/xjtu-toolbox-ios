@@ -17,7 +17,7 @@
 
 ## GitHub Actions 构建
 
-推送到 `main` 后自动构建未签名的 iOS Simulator `.app`，Actions artifact 保留 7 天。该文件用于模拟器，不可直接安装到 iPhone。
+推送到 `main` 后会自动构建未签名的 iOS Simulator `.app` 和 iPhone 设备版未签名 `.ipa`，Actions artifact 保留 7 天。模拟器 `.app` 不能安装到 iPhone；设备版 `.ipa` 需先由你的 7 天签名工具签名后再安装。
 
 要生成能安装到已注册 iPhone 的 Ad Hoc `.ipa`：
 

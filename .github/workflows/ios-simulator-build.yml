@@ -46,6 +46,41 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  unsigned-device-ipa:
+    name: Package unsigned iPhone IPA
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build for iPhone device
+        run: >-
+          xcodebuild
+          -project ios/XJTUToolbox.xcodeproj
+          -scheme XJTUToolbox
+          -configuration Debug
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath build/DeviceDerivedData
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          mkdir -p build/ipa/Payload
+          cp -R build/DeviceDerivedData/Build/Products/Debug-iphoneos/XJTUToolbox.app build/ipa/Payload/
+          cd build/ipa
+          /usr/bin/zip -r ../XJTUToolbox-unsigned.ipa Payload
+
+      - name: Upload unsigned iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: XJTUToolbox-unsigned-ipa-${{ github.sha }}
+          path: build/XJTUToolbox-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
+
   signed-ipa:
     name: Build signed iPhone IPA
     if: github.event_name == 'workflow_dispatch' && inputs.build_ipa
