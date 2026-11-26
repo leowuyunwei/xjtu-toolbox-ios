@@ -24,7 +24,7 @@ struct RootTabView: View {
                         activeLogin = nil
                     }
                 } else {
-                    store.completeCardPortal(cookies: cookies)
+                    Task { await store.completeCardPortal(cookies: cookies) }
                 }
             }
             .environmentObject(store)
@@ -424,3 +424,4 @@ extension View {
             .shadow(color: Color.black.opacity(0.035), radius: 12, y: 4)
     }
 }
+

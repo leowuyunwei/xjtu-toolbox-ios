@@ -46,17 +46,22 @@ final class CampusAPI {
     }
 
     func hasValidJwxtSession() async -> Bool {
-        do {
-            var request = URLRequest(url: jwxtHome)
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            let (_, response) = try await session.data(for: attachCookies(to: request))
-            guard let http = response as? HTTPURLResponse,
-                  http.statusCode < 400,
-                  http.url?.host == "jwxt.xjtu.edu.cn" else { return false }
-            return true
-        } catch {
-            return false
+        // The CAS OAuth callback can finish with a 200 HTML auto-submit page.
+        // Re-opening the JWXT entry once lets the new TGC complete that hop.
+        for _ in 0..<2 {
+            do {
+                var request = URLRequest(url: jwxtHome)
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+                let (_, response) = try await session.data(for: attachCookies(to: request))
+                guard let http = response as? HTTPURLResponse,
+                      http.statusCode < 400,
+                      http.url?.host == "jwxt.xjtu.edu.cn" else { continue }
+                return true
+            } catch {
+                continue
+            }
         }
+        return false
     }
 
     func currentTerm() async throws -> String {

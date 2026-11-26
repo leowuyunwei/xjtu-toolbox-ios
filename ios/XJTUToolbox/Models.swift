@@ -43,6 +43,7 @@ final class CampusStore: ObservableObject {
     @Published private(set) var lastUpdated: Date?
     @Published var loginRequest: LoginTarget?
     @Published var statusMessage: String?
+    private var refreshPending = false
 
     let api = CampusAPI()
 
@@ -68,6 +69,7 @@ final class CampusStore: ObservableObject {
     func completeLogin(cookies: [HTTPCookie]) async {
         api.importCookies(cookies)
         do {
+            guard await api.hasValidJwxtSession() else { throw CampusAPIError.loginRequired }
             _ = try await api.currentTerm()
             isAuthenticated = true
             statusMessage = nil
@@ -78,15 +80,27 @@ final class CampusStore: ObservableObject {
         }
     }
 
-    func completeCardPortal(cookies: [HTTPCookie]) {
+    func completeCardPortal(cookies: [HTTPCookie]) async {
         api.importCookies(cookies)
         isCardPortalConnected = true
+        statusMessage = nil
+        isAuthenticated = await api.hasValidJwxtSession()
+        if isAuthenticated { await refresh() }
     }
 
     func refresh() async {
-        guard !isLoading else { return }
+        guard !isLoading else {
+            refreshPending = true
+            return
+        }
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            if refreshPending {
+                refreshPending = false
+                Task { await self.refresh() }
+            }
+        }
         statusMessage = nil
 
         do {
@@ -122,3 +136,4 @@ extension Color {
     static let campusGreen = Color(red: 0.20, green: 0.67, blue: 0.50)
     static let campusPink = Color(red: 0.89, green: 0.36, blue: 0.57)
 }
+
