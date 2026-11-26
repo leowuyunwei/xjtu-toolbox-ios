@@ -34,11 +34,22 @@ final class CampusAPI {
         webCookies.forEach(cookies.setCookie)
     }
 
+    private func attachCookies(to request: URLRequest) -> URLRequest {
+        guard let url = request.url,
+              let cookieHeader = HTTPCookie.requestHeaderFields(with: cookies.cookies(for: url) ?? [])["Cookie"],
+              !cookieHeader.isEmpty else { return request }
+        var request = request
+        // Explicitly bridge WKWebView's imported cookie jar into URLSession requests.
+        // This avoids relying on URLSession's automatic cookie lookup after SSO.
+        request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+        return request
+    }
+
     func hasValidJwxtSession() async -> Bool {
         do {
             var request = URLRequest(url: jwxtHome)
             request.cachePolicy = .reloadIgnoringLocalCacheData
-            let (_, response) = try await session.data(for: request)
+            let (_, response) = try await session.data(for: attachCookies(to: request))
             guard let http = response as? HTTPURLResponse,
                   http.statusCode < 400,
                   http.url?.host == "jwxt.xjtu.edu.cn" else { return false }
@@ -166,7 +177,7 @@ final class CampusAPI {
 
     private func send(_ request: URLRequest) async throws -> Data {
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: attachCookies(to: request))
             guard let http = response as? HTTPURLResponse else {
                 throw CampusAPIError.invalidResponse("学校系统返回了无效的 HTTP 响应。")
             }
@@ -233,3 +244,4 @@ private func doubleValue(_ value: Any?) -> Double? {
 private extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
 }
+

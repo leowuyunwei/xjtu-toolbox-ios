@@ -103,6 +103,7 @@ private struct CampusAuthWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         var parent: CampusAuthWebView
         private var didComplete = false
+        private var didRetryJwxtEntry = false
 
         init(parent: CampusAuthWebView) { self.parent = parent }
 
@@ -118,6 +119,16 @@ private struct CampusAuthWebView: UIViewRepresentable {
                 isReady = url.host == "ncard.xjtu.edu.cn" && ticket?.isEmpty == false
             }
             guard isReady else { return }
+
+            // CAS may return an auto-submit page between the ticket exchange and the
+            // final JWXT page. Revisit the entry once, as the Android client does,
+            // so JWXT can consume the CAS ticket and issue its own session cookies.
+            if parent.target == .jwxt, !didRetryJwxtEntry {
+                didRetryJwxtEntry = true
+                webView.load(URLRequest(url: parent.startURL))
+                return
+            }
+
             didComplete = true
             webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
                 DispatchQueue.main.async { self.parent.onComplete(cookies, ticket) }
@@ -125,3 +136,4 @@ private struct CampusAuthWebView: UIViewRepresentable {
         }
     }
 }
+
