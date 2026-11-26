@@ -82,6 +82,9 @@ struct HomeView: View {
                             Text("星期\(weekdayNames[store.todayWeekday - 1])")
                                 .font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(.white.opacity(0.17), in: Capsule())
+                            Text(store.currentWeekLabel)
+                                .font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(.white.opacity(0.17), in: Capsule())
                         }
                         if let first = store.courses(on: store.todayWeekday).first {
                             Text("今天共 \(store.courses(on: store.todayWeekday).count) 门课程")
@@ -155,7 +158,7 @@ struct ScheduleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("学期代码：\(store.termCode ?? "—")").font(.subheadline).foregroundStyle(Color.campusMuted)
+                    Text("\(store.currentWeekLabel) · 学期 \(store.termCode ?? "—")").font(.subheadline).foregroundStyle(Color.campusMuted)
                     Text("我的课表").font(.largeTitle.bold()).foregroundStyle(Color.campusInk)
                 }
                 HStack(spacing: 0) {
@@ -182,6 +185,10 @@ struct ScheduleView: View {
                     LoginPrompt(title: "先连接教务账号", detail: "课表将从西安交通大学教务系统读取。", target: .jwxt)
                 } else if store.isLoading && store.courses.isEmpty {
                     ProgressView("正在读取教务课表…").frame(maxWidth: .infinity).padding(24)
+                } else if store.currentWeek == nil {
+                    EmptyState(icon: "calendar.badge.exclamationmark", title: "无法确定当前教学周", detail: "请稍后刷新课表，避免显示错误周次的课程。")
+                } else if store.currentWeek == 0 {
+                    EmptyState(icon: "calendar", title: "当前不在授课周", detail: "学期尚未开始或已结束。")
                 } else if store.courses(on: weekday).isEmpty {
                     EmptyState(icon: "calendar", title: "当天没有课表记录", detail: "如果教务系统暂时没有返回数据，请稍后刷新。")
                 } else {

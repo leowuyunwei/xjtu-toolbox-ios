@@ -8,15 +8,47 @@ enum LoginTarget: String, Identifiable, Hashable {
 }
 
 struct Course: Identifiable {
-    var id: String { "\(termCode)-\(weekday)-\(start)-\(end)-\(name)-\(room)-\(teacher)-\(weeksText)" }
+    var id: String { "\(termCode)-\(weekday)-\(start)-\(end)-\(name)-\(room)-\(teacher)-\(weekBits)-\(weeksText)" }
     let name: String
     let teacher: String
     let room: String
     let start: Int
     let end: Int
     let weekday: Int
+    let weekBits: String
     let weeksText: String
     let termCode: String
+
+    func isActive(in week: Int) -> Bool {
+        guard week > 0 else { return false }
+        let bits = weekBits.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !bits.isEmpty, bits.allSatisfy({ $0 == "0" || $0 == "1" }) {
+            let index = bits.index(bits.startIndex, offsetBy: week - 1, limitedBy: bits.endIndex)
+            guard let index, index < bits.endIndex else { return false }
+            return bits[index] == "1"
+        }
+        return Self.weeks(from: weeksText).contains(week)
+    }
+
+    private static func weeks(from text: String) -> Set<Int> {
+        guard let regex = try? NSRegularExpression(pattern: #"(\d+)(?:-(\d+))?周(?:\(([单双])\))?"#) else { return [] }
+        let compact = text.replacingOccurrences(of: " ", with: "")
+        let range = NSRange(compact.startIndex..<compact.endIndex, in: compact)
+        var result = Set<Int>()
+        for match in regex.matches(in: compact, range: range) {
+            guard let startRange = Range(match.range(at: 1), in: compact),
+                  let start = Int(compact[startRange]) else { continue }
+            let end = Range(match.range(at: 2), in: compact).flatMap { Int(compact[$0]) } ?? start
+            let parity = Range(match.range(at: 3), in: compact).map { String(compact[$0]) }
+            guard end >= start else { continue }
+            for value in start...end {
+                if parity == "单" && value.isMultiple(of: 2) { continue }
+                if parity == "双" && !value.isMultiple(of: 2) { continue }
+                result.insert(value)
+            }
+        }
+        return result
+    }
 
     var color: Color {
         [Color.campusBlue, .campusOrange, .campusPurple, .campusGreen, .campusPink][max(0, (weekday - 1) % 5)]
@@ -37,6 +69,7 @@ final class CampusStore: ObservableObject {
     @Published private(set) var courses: [Course] = []
     @Published private(set) var grades: [Grade] = []
     @Published private(set) var termCode: String?
+    @Published private(set) var currentWeek: Int?
     @Published private(set) var isAuthenticated = false
     @Published private(set) var isCardPortalConnected = false
     @Published private(set) var isLoading = false
@@ -57,8 +90,16 @@ final class CampusStore: ObservableObject {
         (Calendar.current.component(.weekday, from: .now) + 5) % 7 + 1
     }
 
+    var currentWeekLabel: String {
+        guard let currentWeek else { return "周次未知" }
+        return currentWeek > 0 ? "第 \(currentWeek) 周" : "非授课周"
+    }
+
     init() {
-        Task { await checkExistingSession() }
+        Task {
+            await api.restorePersistedCookies()
+            await checkExistingSession()
+        }
     }
 
     func checkExistingSession() async {
@@ -119,6 +160,13 @@ final class CampusStore: ObservableObject {
         isAuthenticated = true
         var failures: [String] = []
         do {
+            currentWeek = try await api.currentWeek(term: term)
+        } catch {
+            currentWeek = nil
+            failures.append("当前教学周计算失败：\(error.localizedDescription)")
+        }
+        await api.persistCookies()
+        do {
             courses = try await api.schedule(term: term)
         } catch {
             failures.append("课表获取失败：\(error.localizedDescription)")
@@ -128,12 +176,15 @@ final class CampusStore: ObservableObject {
         } catch {
             failures.append("成绩获取失败：\(error.localizedDescription)")
         }
+        await api.persistCookies()
         lastUpdated = Date()
         if !failures.isEmpty { statusMessage = failures.joined(separator: "；") }
     }
 
     func courses(on weekday: Int) -> [Course] {
-        courses.filter { $0.weekday == weekday }.sorted { $0.start < $1.start }
+        guard let currentWeek, currentWeek > 0 else { return [] }
+        return courses.filter { $0.weekday == weekday && $0.isActive(in: currentWeek) }
+            .sorted { $0.start < $1.start }
     }
 }
 

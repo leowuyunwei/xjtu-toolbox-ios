@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import SwiftUI
 import WebKit
 
@@ -47,6 +48,26 @@ final class CampusAPI: NSObject, WKNavigationDelegate {
             webView.stopLoading()
             finishPageNavigation(.failure(CampusAPIError.loginRequired))
         }
+        await persistCookies()
+    }
+
+    func restorePersistedCookies() async {
+        let restored = SessionCookieVault.load()
+        guard !restored.isEmpty else { return }
+        let store = webView.configuration.websiteDataStore.httpCookieStore
+        for cookie in restored {
+            await withCheckedContinuation { continuation in
+                store.setCookie(cookie) { continuation.resume() }
+            }
+        }
+    }
+
+    func persistCookies() async {
+        let store = webView.configuration.websiteDataStore.httpCookieStore
+        let allCookies: [HTTPCookie] = await withCheckedContinuation { continuation in
+            store.getAllCookies { continuation.resume(returning: $0) }
+        }
+        SessionCookieVault.save(allCookies)
     }
 
     private func ensureJwxtPage() async throws {
@@ -115,6 +136,37 @@ final class CampusAPI: NSObject, WKNavigationDelegate {
         return code
     }
 
+    func currentWeek(term: String, now: Date = .now) async throws -> Int {
+        let parts = term.split(separator: "-")
+        guard parts.count == 3 else {
+            throw CampusAPIError.invalidResponse("当前学期代码格式无法识别：\(term)")
+        }
+        let url = jwxtBase.appending(path: "/jwapp/sys/wdkb/modules/jshkcb/cxjcs.do")
+        let data = try await send(formRequest(url, fields: [
+            "XN": "\(parts[0])-\(parts[1])",
+            "XQ": String(parts[2])
+        ]))
+        let root = try object(data, label: "学期起始日期")
+        let rows = nestedObjects(root, keys: ["datas", "cxjcs", "rows"])
+        guard let row = rows.first,
+              let startText = stringValue(row["XQKSRQ"])?.prefix(10),
+              let startDate = Self.campusDate(String(startText)) else {
+            throw CampusAPIError.invalidResponse("教务系统没有返回学期起始日期。")
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let weekday = calendar.component(.weekday, from: startDate) // Sunday=1, Monday=2
+        let daysSinceMonday = (weekday + 5) % 7
+        guard let termMonday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: calendar.startOfDay(for: startDate)) else {
+            throw CampusAPIError.invalidResponse("无法计算学期周次。")
+        }
+        let days = calendar.dateComponents([.day], from: termMonday, to: calendar.startOfDay(for: now)).day ?? 0
+        let week = Int(floor(Double(days) / 7.0)) + 1
+        guard week > 0 else { return 0 }
+        return week
+    }
+
     func schedule(term: String) async throws -> [Course] {
         let url = jwxtBase.appending(path: "/jwapp/sys/wdkb/modules/xskcb/xskcb.do")
         let data = try await send(formRequest(url, fields: ["XNXQDM": term]))
@@ -132,6 +184,7 @@ final class CampusAPI: NSObject, WKNavigationDelegate {
                 start: start,
                 end: end,
                 weekday: day,
+                weekBits: stringValue(row["SKZC"]) ?? "",
                 weeksText: stringValue(row["ZCMC"])?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
                     ?? Self.weeksLabel(fromBitString: stringValue(row["SKZC"])),
                 termCode: term
@@ -191,6 +244,7 @@ final class CampusAPI: NSObject, WKNavigationDelegate {
 
     private static func weeksLabel(fromBitString bits: String?) -> String {
         guard let bits, !bits.isEmpty else { return "" }
+        guard bits.allSatisfy({ $0 == "0" || $0 == "1" }) else { return bits }
         let weeks = bits.enumerated().compactMap { index, bit in bit == "1" ? index + 1 : nil }
         guard !weeks.isEmpty else { return bits }
         var ranges: [String] = []
@@ -284,6 +338,15 @@ final class CampusAPI: NSObject, WKNavigationDelegate {
         return result
     }
 
+    private static func campusDate(_ text: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: text)
+    }
+
     private func nestedObjects(_ root: [String: Any], keys: [String]) -> [[String: Any]] {
         var value: Any = root
         for key in keys {
@@ -329,5 +392,61 @@ private func doubleValue(_ value: Any?) -> Double? {
 
 private extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
+}
+
+private enum SessionCookieVault {
+    private static let service = Bundle.main.bundleIdentifier ?? "cn.xjtu.toolbox.ios"
+    private static let account = "campus-web-session"
+
+    static func save(_ cookies: [HTTPCookie]) {
+        let records: [[String: Any]] = cookies.compactMap { cookie in
+            guard cookie.domain.lowercased().contains("xjtu.edu.cn"),
+                  var properties = cookie.properties else { return nil }
+            properties = properties.filter { _, value in
+                value is String || value is Date || value is NSNumber || value is Data
+            }
+            var record: [String: Any] = [:]
+            for (key, value) in properties { record[key.rawValue] = value }
+            record[HTTPCookiePropertyKey.name.rawValue] = cookie.name
+            record[HTTPCookiePropertyKey.value.rawValue] = cookie.value
+            record[HTTPCookiePropertyKey.domain.rawValue] = cookie.domain
+            record[HTTPCookiePropertyKey.path.rawValue] = cookie.path
+            return record
+        }
+        guard !records.isEmpty,
+              let data = try? PropertyListSerialization.data(fromPropertyList: records, format: .binary, options: 0) else { return }
+
+        var query = baseQuery
+        let updateStatus = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecItemNotFound {
+            query[kSecValueData as String] = data
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            SecItemAdd(query as CFDictionary, nil)
+        }
+    }
+
+    static func load() -> [HTTPCookie] {
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data,
+              let records = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [[String: Any]] else { return [] }
+        return records.compactMap { record in
+            let properties = record.reduce(into: [HTTPCookiePropertyKey: Any]()) { result, entry in
+                result[HTTPCookiePropertyKey(entry.key)] = entry.value
+            }
+            return HTTPCookie(properties: properties)
+        }
+    }
+
+    private static var baseQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+    }
 }
 
