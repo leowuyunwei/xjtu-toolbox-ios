@@ -4,13 +4,14 @@ import WebKit
 
 enum CampusAPIError: LocalizedError {
     case loginRequired
+    case authenticationFailure(String)
     case invalidResponse(String)
     case service(String)
 
     var errorDescription: String? {
         switch self {
         case .loginRequired: "请先登录西安交通大学统一身份认证。"
-        case .invalidResponse(let message), .service(let message): message
+        case .authenticationFailure(let message), .invalidResponse(let message), .service(let message): message
         }
     }
 }
@@ -252,8 +253,11 @@ final class CampusAPI: NSObject, WKNavigationDelegate {
                   let text = response["body"] as? String else {
                 throw CampusAPIError.invalidResponse("教务系统没有返回有效的页面数据。")
             }
-            if responseURL.host == "login.xjtu.edu.cn" || status == 401 || status == 403 {
-                throw CampusAPIError.loginRequired
+            if responseURL.host == "login.xjtu.edu.cn" {
+                throw CampusAPIError.authenticationFailure("教务接口 \(url.path) 被重定向到统一认证页面。")
+            }
+            if status == 401 || status == 403 {
+                throw CampusAPIError.authenticationFailure("教务接口 \(url.path) 返回 HTTP \(status)。")
             }
             if status == 0 {
                 let detail = response["error"] as? String ?? "未知错误"
@@ -263,7 +267,7 @@ final class CampusAPI: NSObject, WKNavigationDelegate {
                 throw CampusAPIError.service("学校系统暂时不可用（HTTP \(status)）。")
             }
             if text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
-                throw CampusAPIError.loginRequired
+                throw CampusAPIError.authenticationFailure("教务接口 \(url.path) 返回了网页内容，未返回 JSON 数据。")
             }
             return Data(text.utf8)
         } catch let error as CampusAPIError {

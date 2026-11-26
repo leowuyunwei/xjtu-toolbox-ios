@@ -103,22 +103,33 @@ final class CampusStore: ObservableObject {
         }
         statusMessage = nil
 
+        let term: String
         do {
-            let term = try await api.currentTerm()
-            async let newCourses = api.schedule(term: term)
-            async let newGrades = api.grades()
-            courses = try await newCourses
-            grades = try await newGrades
-            termCode = term
-            isAuthenticated = true
-            lastUpdated = Date()
+            term = try await api.currentTerm()
         } catch CampusAPIError.loginRequired {
             isAuthenticated = false
-            statusMessage = "统一认证会话已失效，请重新登录。"
+            statusMessage = "教务当前学期接口要求重新认证，请重新登录教务系统。"
+            return
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = "无法验证教务会话：\(error.localizedDescription)"
+            return
         }
 
+        termCode = term
+        isAuthenticated = true
+        var failures: [String] = []
+        do {
+            courses = try await api.schedule(term: term)
+        } catch {
+            failures.append("课表获取失败：\(error.localizedDescription)")
+        }
+        do {
+            grades = try await api.grades()
+        } catch {
+            failures.append("成绩获取失败：\(error.localizedDescription)")
+        }
+        lastUpdated = Date()
+        if !failures.isEmpty { statusMessage = failures.joined(separator: "；") }
     }
 
     func courses(on weekday: Int) -> [Course] {
