@@ -67,7 +67,7 @@ final class CampusStore: ObservableObject {
     }
 
     func completeLogin(cookies: [HTTPCookie]) async {
-        api.importCookies(cookies)
+        await api.importCookies(cookies)
         do {
             guard await api.hasValidJwxtSession() else { throw CampusAPIError.loginRequired }
             _ = try await api.currentTerm()
@@ -81,7 +81,7 @@ final class CampusStore: ObservableObject {
     }
 
     func completeCardPortal(cookies: [HTTPCookie]) async {
-        api.importCookies(cookies)
+        await api.importCookies(cookies)
         isCardPortalConnected = true
         statusMessage = nil
         isAuthenticated = await api.hasValidJwxtSession()

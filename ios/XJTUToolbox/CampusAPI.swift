@@ -1,4 +1,5 @@
 import Foundation
+import WebKit
 
 enum CampusAPIError: LocalizedError {
     case loginRequired
@@ -13,55 +14,92 @@ enum CampusAPIError: LocalizedError {
     }
 }
 
-final class CampusAPI {
-    private let cookies = HTTPCookieStorage.shared
-    private let session: URLSession
+@MainActor
+final class CampusAPI: NSObject, WKNavigationDelegate {
+    let webView: WKWebView
     private let jwxtHome = URL(string: "https://jwxt.xjtu.edu.cn/jwapp/sys/homeapp/index.do")!
     private let jwxtBase = URL(string: "https://jwxt.xjtu.edu.cn")!
+    private var pageWaiters: [CheckedContinuation<Void, Error>] = []
+    private var isNavigatingToJwxt = false
+    private var didRetryJwxtNavigation = false
+    private var hasLoadedJwxtPage = false
 
-    init() {
-        cookies.cookieAcceptPolicy = .always
-        let configuration = URLSessionConfiguration.default
-        configuration.httpCookieStorage = cookies
-        configuration.httpShouldSetCookies = true
-        configuration.httpCookieAcceptPolicy = .always
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 60
-        session = URLSession(configuration: configuration)
+    override init() {
+        let configuration = WKWebViewConfiguration()
+        // Share the same WebKit cookie store as the visible school login page.
+        configuration.websiteDataStore = .default()
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        super.init()
+        webView.navigationDelegate = self
     }
 
-    func importCookies(_ webCookies: [HTTPCookie]) {
-        webCookies.forEach(cookies.setCookie)
+    func importCookies(_ webCookies: [HTTPCookie]) async {
+        let store = webView.configuration.websiteDataStore.httpCookieStore
+        for cookie in webCookies {
+            await withCheckedContinuation { continuation in
+                store.setCookie(cookie) { continuation.resume() }
+            }
+        }
+        hasLoadedJwxtPage = false
+        if isNavigatingToJwxt {
+            webView.stopLoading()
+            finishPageNavigation(.failure(CampusAPIError.loginRequired))
+        }
     }
 
-    private func attachCookies(to request: URLRequest) -> URLRequest {
-        guard let url = request.url,
-              let cookieHeader = HTTPCookie.requestHeaderFields(with: cookies.cookies(for: url) ?? [])["Cookie"],
-              !cookieHeader.isEmpty else { return request }
-        var request = request
-        // Explicitly bridge WKWebView's imported cookie jar into URLSession requests.
-        // This avoids relying on URLSession's automatic cookie lookup after SSO.
-        request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
-        return request
+    private func ensureJwxtPage() async throws {
+        if hasLoadedJwxtPage, webView.url?.host == jwxtBase.host { return }
+        try await withCheckedThrowingContinuation { continuation in
+            pageWaiters.append(continuation)
+            guard !isNavigatingToJwxt else { return }
+            isNavigatingToJwxt = true
+            didRetryJwxtNavigation = false
+            webView.load(URLRequest(url: jwxtHome))
+        }
     }
 
     func hasValidJwxtSession() async -> Bool {
-        // The CAS OAuth callback can finish with a 200 HTML auto-submit page.
-        // Re-opening the JWXT entry once lets the new TGC complete that hop.
-        for _ in 0..<2 {
-            do {
-                var request = URLRequest(url: jwxtHome)
-                request.cachePolicy = .reloadIgnoringLocalCacheData
-                let (_, response) = try await session.data(for: attachCookies(to: request))
-                guard let http = response as? HTTPURLResponse,
-                      http.statusCode < 400,
-                      http.url?.host == "jwxt.xjtu.edu.cn" else { continue }
-                return true
-            } catch {
-                continue
-            }
+        do { _ = try await currentTerm(); return true }
+        catch { return false }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard isNavigatingToJwxt else { return }
+        if webView.url?.host == jwxtBase.host {
+            hasLoadedJwxtPage = true
+            finishPageNavigation(.success(()))
+        } else {
+            retryOrFailPageNavigation()
         }
-        return false
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard isNavigatingToJwxt else { return }
+        if (error as NSError).code == NSURLErrorCancelled { return }
+        retryOrFailPageNavigation(error: error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard isNavigatingToJwxt else { return }
+        if (error as NSError).code == NSURLErrorCancelled { return }
+        retryOrFailPageNavigation(error: error)
+    }
+
+    private func retryOrFailPageNavigation(error: Error = CampusAPIError.loginRequired) {
+        if !didRetryJwxtNavigation {
+            didRetryJwxtNavigation = true
+            webView.load(URLRequest(url: jwxtHome))
+        } else {
+            hasLoadedJwxtPage = false
+            finishPageNavigation(.failure(error))
+        }
+    }
+
+    private func finishPageNavigation(_ result: Result<Void, Error>) {
+        isNavigatingToJwxt = false
+        let waiters = pageWaiters
+        pageWaiters.removeAll()
+        waiters.forEach { $0.resume(with: result) }
     }
 
     func currentTerm() async throws -> String {
@@ -182,20 +220,51 @@ final class CampusAPI {
 
     private func send(_ request: URLRequest) async throws -> Data {
         do {
-            let (data, response) = try await session.data(for: attachCookies(to: request))
-            guard let http = response as? HTTPURLResponse else {
-                throw CampusAPIError.invalidResponse("学校系统返回了无效的 HTTP 响应。")
+            guard let url = request.url else {
+                throw CampusAPIError.invalidResponse("学校系统请求地址无效。")
             }
-            if http.url?.host == "login.xjtu.edu.cn" || http.statusCode == 401 || http.statusCode == 403 {
+            try await ensureJwxtPage()
+
+            let method = request.httpMethod ?? "GET"
+            let body = request.httpBody.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            let headers = (request.allHTTPHeaderFields ?? [:]).filter { name, _ in
+                !["cookie", "referer", "origin", "host", "content-length"].contains(name.lowercased())
+            }
+            let result = try await webView.callAsyncJavaScript(
+                """
+                let options = { method, headers, credentials: 'include', cache: 'no-store' };
+                if (method !== 'GET' && method !== 'HEAD') options.body = body;
+                try {
+                    const response = await fetch(url, options);
+                    return { status: response.status, url: response.url, body: await response.text(), error: '' };
+                } catch (error) {
+                    return { status: 0, url: location.href, body: '', error: String(error) };
+                }
+                """,
+                arguments: ["url": url.absoluteString, "method": method, "headers": headers, "body": body],
+                in: nil,
+                contentWorld: .page
+            )
+            guard let response = result as? [String: Any],
+                  let status = (response["status"] as? NSNumber)?.intValue,
+                  let responseURL = URL(string: response["url"] as? String ?? ""),
+                  let text = response["body"] as? String else {
+                throw CampusAPIError.invalidResponse("教务系统没有返回有效的页面数据。")
+            }
+            if responseURL.host == "login.xjtu.edu.cn" || status == 401 || status == 403 {
                 throw CampusAPIError.loginRequired
             }
-            guard (200..<300).contains(http.statusCode) else {
-                throw CampusAPIError.service("学校系统暂时不可用（HTTP \(http.statusCode)）。")
+            if status == 0 {
+                let detail = response["error"] as? String ?? "未知错误"
+                throw CampusAPIError.service("教务页面无法读取接口响应：\(detail)")
             }
-            if let text = String(data: data.prefix(500), encoding: .utf8), text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
+            guard (200..<300).contains(status) else {
+                throw CampusAPIError.service("学校系统暂时不可用（HTTP \(status)）。")
+            }
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
                 throw CampusAPIError.loginRequired
             }
-            return data
+            return Data(text.utf8)
         } catch let error as CampusAPIError {
             throw error
         } catch {
@@ -227,6 +296,13 @@ final class CampusAPI {
             return "\(encodedKey)=\(encodedValue)"
         }.joined(separator: "&")
     }
+}
+
+struct CampusAPIWebViewHost: UIViewRepresentable {
+    let webView: WKWebView
+
+    func makeUIView(context: Context) -> WKWebView { webView }
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
 private func stringValue(_ value: Any?) -> String? {

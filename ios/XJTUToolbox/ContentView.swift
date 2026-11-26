@@ -5,15 +5,22 @@ struct RootTabView: View {
     @State private var activeLogin: LoginTarget?
 
     var body: some View {
-        TabView {
-            NavigationStack { HomeView() }
-                .tabItem { Label("首页", systemImage: "square.grid.2x2.fill") }
-            NavigationStack { ScheduleView() }
-                .tabItem { Label("课表", systemImage: "calendar") }
-            NavigationStack { ToolsView() }
-                .tabItem { Label("工具", systemImage: "square.grid.3x3.fill") }
-            NavigationStack { ProfileView() }
-                .tabItem { Label("我的", systemImage: "person.crop.circle") }
+        ZStack(alignment: .bottomTrailing) {
+            TabView {
+                NavigationStack { HomeView() }
+                    .tabItem { Label("首页", systemImage: "square.grid.2x2.fill") }
+                NavigationStack { ScheduleView() }
+                    .tabItem { Label("课表", systemImage: "calendar") }
+                NavigationStack { ToolsView() }
+                    .tabItem { Label("工具", systemImage: "square.grid.3x3.fill") }
+                NavigationStack { ProfileView() }
+                    .tabItem { Label("我的", systemImage: "person.crop.circle") }
+            }
+            CampusAPIWebViewHost(webView: store.api.webView)
+                .frame(width: 1, height: 1)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .background(Color.campusCanvas)
         .sheet(item: $activeLogin) { target in
