@@ -400,17 +400,18 @@ private enum SessionCookieVault {
 
     static func save(_ cookies: [HTTPCookie]) {
         let records: [[String: Any]] = cookies.compactMap { cookie in
-            guard cookie.domain.lowercased().contains("xjtu.edu.cn"),
-                  var properties = cookie.properties else { return nil }
-            properties = properties.filter { _, value in
-                value is String || value is Date || value is NSNumber || value is Data
+            let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            guard domain == "xjtu.edu.cn" || domain.hasSuffix(".xjtu.edu.cn") else { return nil }
+            var record: [String: Any] = [
+                HTTPCookiePropertyKey.name.rawValue: cookie.name,
+                HTTPCookiePropertyKey.value.rawValue: cookie.value,
+                HTTPCookiePropertyKey.domain.rawValue: cookie.domain,
+                HTTPCookiePropertyKey.path.rawValue: cookie.path
+            ]
+            for (key, value) in cookie.properties ?? [:] where
+                value is String || value is Date || value is NSNumber || value is Data {
+                record[key.rawValue] = value
             }
-            var record: [String: Any] = [:]
-            for (key, value) in properties { record[key.rawValue] = value }
-            record[HTTPCookiePropertyKey.name.rawValue] = cookie.name
-            record[HTTPCookiePropertyKey.value.rawValue] = cookie.value
-            record[HTTPCookiePropertyKey.domain.rawValue] = cookie.domain
-            record[HTTPCookiePropertyKey.path.rawValue] = cookie.path
             return record
         }
         guard !records.isEmpty,
